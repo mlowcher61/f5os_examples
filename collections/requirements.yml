@@ -16,4 +16,5 @@ collections:
 
   # Only needed to run the aap_config/ config-as-code playbooks.
   - name: ansible.controller
+    version: 4.8.4
   - name: ansible.platform
