@@ -1,0 +1,17 @@
+---
+galaxy_info:
+  role_name: f5os_target
+  author: mlowcher61
+  description: >-
+    Turns the values injected by the F5OS rSeries custom credential into an
+    in-memory host in the "f5os" group, so the f5networks.f5os modules can
+    reach the appliance over httpapi from a localhost-only inventory.
+  license: MIT
+  min_ansible_version: "2.15"
+  galaxy_tags:
+    - f5
+    - f5os
+    - rseries
+    - networking
+
+dependencies: []

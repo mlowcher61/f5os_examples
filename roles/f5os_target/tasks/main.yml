@@ -1,0 +1,53 @@
+---
+# Bridges a localhost-only inventory to an F5OS appliance.
+#
+# WHY THIS ROLE EXISTS
+# The f5networks.f5os modules take no host/username/password arguments. They
+# read the connection entirely from the httpapi plugin, which means the target
+# has to be a real inventory host - you cannot reach an appliance from a play
+# running on localhost with connection: local.
+#
+# So every playbook in this repo starts with one short play on localhost that
+# runs this role. It reads the values injected by the custom credential and
+# registers them as a host in the "f5os" group. That host immediately inherits
+# the whole connection profile (protocol, port, timeouts) from
+# inventory/group_vars/f5os.yml, and the next play can talk to the appliance.
+#
+# Nothing here is written to disk and nothing is logged.
+
+- name: Verify the F5OS credential supplied a host, user and password
+  ansible.builtin.assert:
+    that:
+      - f5os_host | default('', true) | length > 0
+      - f5os_user | default('', true) | length > 0
+      - f5os_password | default('', true) | length > 0
+    quiet: true
+    fail_msg: >-
+      No F5OS connection details were found.
+      In AAP: attach the "F5OS rSeries" credential to this job template
+      (Job Template > Credentials > F5OS rSeries).
+      Running locally: export F5OS_HOST, F5OS_USER and F5OS_PASSWORD, or pass
+      -e f5os_host=... -e f5os_user=... -e f5os_password=...
+    success_msg: "F5OS credential present for {{ f5os_host }}"
+
+- name: Register the F5OS appliance as a member of the f5os group
+  ansible.builtin.add_host:
+    name: "{{ f5os_target_name }}"
+    groups:
+      - f5os
+    # Only the per-device facts are set here. Everything else - the httpapi
+    # connection plugin, network OS, SSL and the timeouts - comes from
+    # inventory/group_vars/f5os.yml by virtue of joining the group.
+    ansible_host: "{{ f5os_host }}"
+    ansible_user: "{{ f5os_user }}"
+    ansible_httpapi_password: "{{ f5os_password }}"
+    ansible_httpapi_port: "{{ f5os_port | default(8888, true) | int }}"
+    ansible_httpapi_validate_certs: "{{ f5os_validate_certs | default(false, true) | bool }}"
+  changed_when: false
+  no_log: true
+
+- name: Confirm the target that the following plays will configure
+  ansible.builtin.debug:
+    msg: >-
+      F5OS target ready: {{ f5os_target_name }} ({{ f5os_host }}:{{ f5os_port | default(8888, true) }})
+      as user '{{ f5os_user }}'

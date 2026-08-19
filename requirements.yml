@@ -1,0 +1,19 @@
+---
+# Collections needed to run this repo FROM A LAPTOP:
+#
+#   ansible-galaxy collection install -r requirements.yml
+#
+# Note the filename and location. AAP automatically installs collections found
+# at `collections/requirements.yml` on every single job run, which adds a Galaxy
+# round-trip to each job. Because this solution ships a custom execution
+# environment that already bakes these in (see execution-environment/), this
+# file deliberately lives at the repo root instead, where AAP ignores it.
+collections:
+  - name: f5networks.f5os
+    version: ">=1.22.0"
+  - name: ansible.netcommon
+    version: ">=8.0.0"
+
+  # Only needed to run the aap_config/ config-as-code playbooks.
+  - name: ansible.controller
+  - name: ansible.platform

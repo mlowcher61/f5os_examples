@@ -1,0 +1,61 @@
+---
+# Copy this file, fill it in, and pass it at deploy time:
+#
+#   cp aap_config/vars/main.yml.example aap_config/vars/main.yml
+#   $EDITOR aap_config/vars/main.yml
+#   ansible-playbook aap_config/deploy_aap.yml -e @aap_config/vars/main.yml
+#
+# aap_config/vars/main.yml is gitignored. NEVER commit real secrets.
+# This file is only used to BUILD the AAP objects. Once the credential exists
+# in AAP, the running job templates get their secrets from AAP, not from here.
+
+# --- Connecting to AAP to run this config-as-code -----------------------------
+# ansible.controller modules use controller_*; ansible.platform uses aap_*.
+# Setting the controller_* values is enough - 00_organization.yml falls back to
+# them - but you can override the aap_* ones if the gateway differs.
+controller_host: https://aap.example.com
+controller_username: admin
+controller_password: CHANGEME
+aap_validate_certs: false
+
+# aap_hostname: "{{ controller_host }}"
+# aap_username: "{{ controller_username }}"
+# aap_password: "{{ controller_password }}"
+
+# --- Names of the objects created ---------------------------------------------
+aap_organization: Default
+aap_project: F5OS Examples
+aap_inventory: f5_inventory
+aap_execution_environment: F5OS EE
+f5os_credential_type_name: f5os_rseries
+f5os_credential_name: F5OS rSeries
+
+# Set to false if the account above cannot create organizations and you are
+# reusing an existing one.
+aap_manage_organization: true
+
+# --- The F5OS appliance this credential points at ------------------------------
+# These populate the credential in AAP. After that, they live only in AAP.
+f5os_host: 10.10.10.5
+f5os_user: admin
+f5os_password: CHANGEME
+f5os_port: "8888"          # 8888 = RESTCONF, 443 = OpenAPI
+f5os_validate_certs: false  # true once a trusted certificate is installed
+
+# --- Project source -------------------------------------------------------------
+project_scm_url: https://github.com/mlowcher61/f5os_examples.git
+project_scm_branch: main
+# Only needed if the repo above is PRIVATE:
+# scm_username: mlowcher61
+# scm_token: ghp_CHANGEME
+# project_scm_credential: F5OS SCM
+
+# --- Execution environment -------------------------------------------------------
+# Built from execution-environment/ with:
+#   ansible-builder build -t quay.io/mlowcher61/f5os-ee:latest -v3
+ee_image: quay.io/mlowcher61/f5os-ee:latest
+# Only if the registry requires authentication:
+# ee_registry_host: quay.io
+# ee_registry_username: mlowcher61
+# ee_registry_password: CHANGEME
+# ee_registry_credential: F5OS EE Registry

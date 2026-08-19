@@ -1,0 +1,4 @@
+# System packages layered into the execution environment.
+# openssh-clients provides scp/sftp, which f5os_config_backup and
+# f5os_tenant_image use when protocol is scp or sftp rather than https.
+openssh-clients [platform:rpm]

@@ -1,0 +1,35 @@
+---
+# The organization every other object below is created inside.
+#
+# This is the ONE file that uses ansible.platform rather than ansible.controller.
+# In AAP 2.5 and later the organization is a *platform gateway* object shared by
+# controller, EDA and Automation Hub, so it is managed by ansible.platform.
+# Credentials, projects, inventories, execution environments and job templates
+# are still *controller* objects and are managed by ansible.controller. That
+# split is a property of the platform, not a style choice.
+#
+# ansible.platform is certified content and ships via Red Hat Automation Hub -
+# the copy on public Galaxy is a non-functional stub. It is already present in
+# the ee-supported-rhel9 base image this solution's EE is built from.
+- name: Ensure the organization exists
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  module_defaults:
+    group/ansible.platform.gateway:
+      aap_hostname: "{{ aap_hostname | default(controller_host) }}"
+      aap_username: "{{ aap_username | default(controller_username) }}"
+      aap_password: "{{ aap_password | default(controller_password) }}"
+      aap_validate_certs: "{{ aap_validate_certs | default(false) }}"
+
+  tasks:
+    - name: Organization for the F5OS automation
+      ansible.platform.organization:
+        name: "{{ aap_organization }}"
+        description: "F5OS / rSeries platform automation"
+        state: present
+      # "Default" always exists on a fresh install, so creating it is a no-op.
+      # Skipped entirely if you are deliberately reusing an org you cannot
+      # modify with the account running this playbook.
+      when: aap_manage_organization | default(true) | bool

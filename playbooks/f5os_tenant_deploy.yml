@@ -1,0 +1,110 @@
+---
+# Full BIG-IP tenant lifecycle on rSeries: import the image, define the
+# tenant, then bring it up and wait until it is genuinely usable.
+#
+# The two-step running_state is the important part. The tenant is created
+# "configured" (defined but not running), then moved to "deployed" in a second
+# call. Doing it that way means a bad size or VLAN reference fails while the
+# tenant is still inert, rather than half-way through a boot.
+#
+# The final wait uses state: api-ready rather than deployed, because
+# "deployed" only means the VM was started - it does not mean iControl REST is
+# answering yet. A follow-on job that configures the BIG-IP will fail against
+# a merely "deployed" tenant.
+#
+# AAP: job template "F5OS - Tenant Deploy"
+
+- name: Build the F5OS target from the attached credential
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - f5os_target
+
+- name: Import the tenant image and deploy the tenant
+  hosts: f5os
+  gather_facts: false
+  vars:
+    # --- Image -----------------------------------------------------------
+    # Must already sit on a reachable HTTPS/SCP/SFTP server. F5OS pulls it;
+    # the execution node never handles the file.
+    f5os_tenant_image_name: BIGIP-17.5.0-0.0.15.ALL-F5OS.qcow2.zip.bundle
+    f5os_image_protocol: https
+    f5os_image_remote_host: images.example.com
+    f5os_image_remote_path: /bigip
+    f5os_image_local_path: images
+
+    # --- Tenant ----------------------------------------------------------
+    f5os_tenant_name: bigip-tenant-01
+    f5os_tenant_nodes: [1]
+    f5os_tenant_mgmt_ip: 10.10.10.20
+    f5os_tenant_mgmt_prefix: 24
+    f5os_tenant_mgmt_gateway: 10.10.10.1
+    f5os_tenant_vlans: [245, 246]
+    f5os_tenant_cpu_cores: 4
+    f5os_tenant_memory: 14848
+    f5os_tenant_virtual_disk_size: 82
+    f5os_tenant_cryptos: enabled
+
+    # How long to wait for the tenant's API to answer, in seconds.
+    f5os_tenant_api_timeout: 900
+
+  tasks:
+    - name: Import the BIG-IP tenant image onto the appliance
+      f5networks.f5os.f5os_tenant_image:
+        image_name: "{{ f5os_tenant_image_name }}"
+        protocol: "{{ f5os_image_protocol }}"
+        remote_host: "{{ f5os_image_remote_host }}"
+        remote_path: "{{ f5os_image_remote_path }}"
+        remote_user: "{{ f5os_image_remote_user | default(omit) }}"
+        remote_password: "{{ f5os_image_remote_password | default(omit) }}"
+        local_path: "{{ f5os_image_local_path }}"
+        state: import
+        timeout: 600
+      no_log: "{{ f5os_image_remote_password is defined }}"
+
+    - name: Wait for the image to finish verifying
+      f5networks.f5os.f5os_tenant_image:
+        image_name: "{{ f5os_tenant_image_name }}"
+        state: present
+      register: f5os_image_ready
+      until: f5os_image_ready is not failed
+      retries: 30
+      delay: 20
+
+    - name: Define the tenant without starting it
+      f5networks.f5os.f5os_tenant:
+        name: "{{ f5os_tenant_name }}"
+        image_name: "{{ f5os_tenant_image_name }}"
+        nodes: "{{ f5os_tenant_nodes }}"
+        mgmt_ip: "{{ f5os_tenant_mgmt_ip }}"
+        mgmt_prefix: "{{ f5os_tenant_mgmt_prefix }}"
+        mgmt_gateway: "{{ f5os_tenant_mgmt_gateway }}"
+        vlans: "{{ f5os_tenant_vlans }}"
+        cpu_cores: "{{ f5os_tenant_cpu_cores }}"
+        memory: "{{ f5os_tenant_memory }}"
+        virtual_disk_size: "{{ f5os_tenant_virtual_disk_size }}"
+        cryptos: "{{ f5os_tenant_cryptos }}"
+        running_state: configured
+        state: present
+
+    - name: Start the tenant
+      f5networks.f5os.f5os_tenant:
+        name: "{{ f5os_tenant_name }}"
+        running_state: deployed
+        state: present
+
+    - name: Wait until the tenant's API is actually answering
+      f5networks.f5os.f5os_tenant_wait:
+        name: "{{ f5os_tenant_name }}"
+        state: api-ready
+        timeout: "{{ f5os_tenant_api_timeout }}"
+        delay: 10
+        sleep: 10
+
+    - name: Report how to reach the new tenant
+      ansible.builtin.debug:
+        msg: >-
+          Tenant '{{ f5os_tenant_name }}' is API-ready at
+          https://{{ f5os_tenant_mgmt_ip }} - hand this address to your
+          BIG-IP configuration job template next.

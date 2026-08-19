@@ -1,0 +1,60 @@
+---
+# Take an F5OS configuration backup and push it to a remote server.
+#
+# Worth understanding: F5OS creates the backup file on the appliance and then
+# uploads it itself. The execution node only issues the API call, so the file
+# never passes through AAP and the remote server must be reachable from the
+# appliance's management network, not from your execution node.
+#
+# force: true lets the job overwrite a backup of the same name, which is what
+# you want on a schedule where the name is date-stamped but a retry might
+# reuse it.
+#
+# AAP: job template "F5OS - Config Backup" (good candidate for a schedule)
+
+- name: Build the F5OS target from the attached credential
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - f5os_target
+
+- name: Back up the F5OS configuration
+  hosts: f5os
+  gather_facts: false
+  vars:
+    # Date-stamped so a nightly schedule does not overwrite yesterday's copy.
+    f5os_backup_name: "{{ f5os_host }}-{{ '%Y-%m-%d' | strftime }}.conf"
+
+    # Where the appliance should send it. scp and sftp need remote_user and
+    # remote_password; https usually needs neither.
+    f5os_backup_protocol: scp
+    f5os_backup_remote_host: backups.example.com
+    f5os_backup_remote_path: /srv/f5os-backups
+    f5os_backup_remote_port: 22
+
+    # Supply these from a second custom credential rather than in git.
+    # f5os_backup_remote_user / f5os_backup_remote_password
+
+  tasks:
+    - name: Create the configuration backup and upload it
+      f5networks.f5os.f5os_config_backup:
+        name: "{{ f5os_backup_name }}"
+        protocol: "{{ f5os_backup_protocol }}"
+        remote_host: "{{ f5os_backup_remote_host }}"
+        remote_path: "{{ f5os_backup_remote_path }}"
+        remote_port: "{{ f5os_backup_remote_port | default(omit) }}"
+        remote_user: "{{ f5os_backup_remote_user | default(omit) }}"
+        remote_password: "{{ f5os_backup_remote_password | default(omit) }}"
+        force: true
+        state: present
+        timeout: 600
+      register: f5os_backup_result
+      no_log: "{{ f5os_backup_remote_password is defined }}"
+
+    - name: Report where the backup went
+      ansible.builtin.debug:
+        msg: >-
+          Backup '{{ f5os_backup_name }}' written to
+          {{ f5os_backup_remote_host }}:{{ f5os_backup_remote_path }}
+          via {{ f5os_backup_protocol }}.

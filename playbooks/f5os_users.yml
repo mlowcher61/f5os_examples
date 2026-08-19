@@ -1,0 +1,101 @@
+---
+# Local users, RBAC roles, password policy and remote (LDAP/RADIUS/TACACS+)
+# authentication.
+#
+# Note how the two modules divide the work: f5os_user creates an account and
+# assigns its role but never sets a password, while f5os_user_password_change
+# rotates a password and needs the CURRENT one to do it. That means a brand
+# new account starts with the platform default password and must be rotated
+# on first login or by this playbook.
+#
+# The password-rotation task is gated behind f5os_rotate_passwords (default
+# false) so that a routine run of this playbook cannot lock anyone out.
+#
+# AAP: job template "F5OS - Users and Auth"
+
+- name: Build the F5OS target from the attached credential
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - f5os_target
+
+- name: Manage users, roles and authentication
+  hosts: f5os
+  gather_facts: false
+  vars:
+    # Built-in F5OS roles: admin, operator, user, superuser, resource-admin.
+    f5os_users:
+      - username: netops
+        role: admin
+      - username: monitoring
+        role: operator
+      - username: auditor
+        role: user
+
+    # Order in which F5OS tries authentication sources.
+    f5os_auth_order:
+      - local
+      - ldap
+
+    f5os_password_policy:
+      min_length: 12
+      min_upper: 1
+      min_lower: 1
+      min_number: 1
+      min_special: 1
+      max_age: 90
+      max_login_failures: 5
+      unlock_time: 300
+      reject_username: true
+
+    # Maps a remote directory group onto an F5OS role.
+    f5os_remote_roles:
+      - rolename: admin
+        ldap_group: f5os-admins
+        remote_gid: 9000
+
+    f5os_auth_servergroups: []
+    # - name: corp-ldap
+    #   protocol: ldap
+    #   servers:
+    #     - address: 10.20.30.60
+    #       port: 636
+    #       timeout: 10
+
+    # Password rotation is deliberately opt-in.
+    f5os_rotate_passwords: false
+    f5os_password_rotations: []
+    # - user_name: netops
+    #   old_password: "{{ vault_netops_old }}"
+    #   new_password: "{{ vault_netops_new }}"
+
+  tasks:
+    - name: Create the local user accounts
+      f5networks.f5os.f5os_user:
+        username: "{{ item.username }}"
+        role: "{{ item.role }}"
+        expiry_status: "{{ item.expiry_status | default(omit) }}"
+        state: present
+      loop: "{{ f5os_users }}"
+      loop_control:
+        label: "{{ item.username }} ({{ item.role }})"
+
+    - name: Apply the password policy, auth order and remote role mappings
+      f5networks.f5os.f5os_auth:
+        auth_order: "{{ f5os_auth_order }}"
+        password_policy: "{{ f5os_password_policy }}"
+        remote_roles: "{{ f5os_remote_roles | default(omit) }}"
+        servergroups: "{{ f5os_auth_servergroups | default(omit) }}"
+        state: present
+
+    - name: Rotate user passwords
+      f5networks.f5os.f5os_user_password_change:
+        user_name: "{{ item.user_name }}"
+        old_password: "{{ item.old_password }}"
+        new_password: "{{ item.new_password }}"
+      loop: "{{ f5os_password_rotations }}"
+      loop_control:
+        label: "{{ item.user_name }}"
+      when: f5os_rotate_passwords | bool
+      no_log: true

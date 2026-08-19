@@ -1,0 +1,9 @@
+# Python dependencies for the F5OS collection and these playbooks.
+# f5networks.f5os talks RESTCONF over HTTPS and parses JSON responses.
+packaging
+requests
+urllib3
+
+# Used by the json_query / to_nice_yaml handling in the device-info and
+# backup playbooks.
+jmespath

@@ -1,0 +1,96 @@
+---
+# Upgrade the F5OS platform software itself: import the image, then install it.
+#
+# THIS IS THE MOST DISRUPTIVE PLAYBOOK IN THE REPO. Installing F5OS reboots
+# the appliance and takes every tenant on it down. Treat it as a change-window
+# job, not something a survey-driven self-service template should expose.
+#
+# The design here is deliberately cautious:
+#   1. a config backup runs first, because the fastest recovery from a bad
+#      upgrade is a known-good configuration,
+#   2. import and install are separate tasks, so you can run the import
+#      well ahead of the window and do only the install during it,
+#   3. install is gated behind f5os_perform_install (default false), which
+#      makes the safe run - import only - the one you get by accident.
+#
+# AAP: job template "F5OS - System Upgrade"
+#      Do not attach a schedule. Require approval in a workflow instead.
+
+- name: Build the F5OS target from the attached credential
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - f5os_target
+
+- name: Import and optionally install an F5OS system image
+  hosts: f5os
+  gather_facts: false
+  vars:
+    # Full URL the APPLIANCE will pull from - not a path on the execution node.
+    f5os_system_image_url: https://images.example.com/f5os/F5OS-A-1.8.0-3928.R5R10.iso
+    # The version string as F5OS reports it. Must match the imported image.
+    f5os_system_image_version: "1.8.0-3928"
+    f5os_system_image_local_path: images
+
+    # Optional credentials for the image server.
+    # f5os_image_remote_user / f5os_image_remote_password
+
+    # Safety gates. Both must be true for the appliance to reboot.
+    f5os_take_backup_first: true
+    f5os_perform_install: false
+
+    f5os_backup_remote_host: backups.example.com
+    f5os_backup_remote_path: /srv/f5os-backups
+
+  tasks:
+    - name: Record what the appliance looks like before the upgrade
+      f5networks.f5os.f5os_device_info:
+        gather_subset:
+          - system-info
+          - tenants-info
+      register: f5os_pre_upgrade
+
+    - name: Show the pre-upgrade state
+      ansible.builtin.debug:
+        msg: "{{ f5os_pre_upgrade.system_info | default({}) }}"
+
+    - name: Take a configuration backup before touching the software
+      f5networks.f5os.f5os_config_backup:
+        name: "pre-upgrade-{{ f5os_system_image_version }}-{{ '%Y%m%d-%H%M' | strftime }}.conf"
+        protocol: scp
+        remote_host: "{{ f5os_backup_remote_host }}"
+        remote_path: "{{ f5os_backup_remote_path }}"
+        remote_user: "{{ f5os_backup_remote_user | default(omit) }}"
+        remote_password: "{{ f5os_backup_remote_password | default(omit) }}"
+        force: true
+        state: present
+        timeout: 600
+      when: f5os_take_backup_first | bool
+      no_log: "{{ f5os_backup_remote_password is defined }}"
+
+    - name: Import the F5OS system image
+      f5networks.f5os.f5os_system_image_import:
+        remote_image_url: "{{ f5os_system_image_url }}"
+        remote_user: "{{ f5os_image_remote_user | default(omit) }}"
+        remote_password: "{{ f5os_image_remote_password | default(omit) }}"
+        local_path: "{{ f5os_system_image_local_path }}"
+        state: import
+        timeout: 900
+      no_log: "{{ f5os_image_remote_password is defined }}"
+
+    - name: Report that the import finished and stop here unless told otherwise
+      ansible.builtin.debug:
+        msg: >-
+          Image {{ f5os_system_image_version }} imported.
+          {% if not (f5os_perform_install | bool) %}
+          Install was NOT performed. Re-run in your change window with
+          -e f5os_perform_install=true to install and reboot.
+          {% endif %}
+
+    - name: Install the system image and reboot the appliance
+      f5networks.f5os.f5os_system_image_install:
+        image_version: "{{ f5os_system_image_version }}"
+        state: install
+        timeout: 900
+      when: f5os_perform_install | bool

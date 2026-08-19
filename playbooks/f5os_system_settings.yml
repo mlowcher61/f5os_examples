@@ -1,0 +1,107 @@
+---
+# Baseline platform settings: NTP, DNS, SNMP, remote syslog and the rSeries
+# out-of-band management interface.
+#
+# Time first, on purpose. Certificate validation, licence activation and log
+# correlation all break in confusing ways when the appliance clock is wrong,
+# so NTP is configured before anything else in this playbook.
+#
+# CAUTION: the management-interface task can cut your own connection if you
+# change the address you are currently reaching the box on. It is gated behind
+# f5os_manage_mgmt_interface, which defaults to false.
+#
+# AAP: job template "F5OS - System Settings"
+
+- name: Build the F5OS target from the attached credential
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - f5os_target
+
+- name: Apply baseline system settings
+  hosts: f5os
+  gather_facts: false
+  vars:
+    f5os_ntp_servers:
+      - server: 0.pool.ntp.org
+        prefer: true
+        iburst: true
+      - server: 1.pool.ntp.org
+        iburst: true
+
+    f5os_dns_servers:
+      - 8.8.8.8
+      - 8.8.4.4
+    f5os_dns_domains:
+      - example.com
+
+    f5os_snmp_location: "Data Center 1 - Rack A12"
+    f5os_snmp_contact: "netops@example.com"
+    f5os_snmp_communities:
+      - name: ro-community
+        security_model:
+          - v2c
+    f5os_snmp_targets:
+      - name: nms-primary
+        ipv4_address: 10.20.30.40
+        port: 162
+        community: ro-community
+        security_model: v2c
+
+    f5os_syslog_servers:
+      - address: 10.20.30.50
+        port: 514
+        protocol: tcp
+        logs:
+          - facility: local0
+            severity: informational
+
+    # Off by default - see the caution above.
+    f5os_manage_mgmt_interface: false
+    f5os_mgmt_dhcp: false
+    f5os_mgmt_ipv4:
+      ip_address: 10.10.10.5
+      prefix_length: 24
+      gateway: 10.10.10.1
+
+  tasks:
+    - name: Configure NTP servers
+      f5networks.f5os.f5os_ntp_server:
+        server: "{{ item.server }}"
+        prefer: "{{ item.prefer | default(omit) }}"
+        iburst: "{{ item.iburst | default(omit) }}"
+        ntp_service: true
+        state: present
+      loop: "{{ f5os_ntp_servers }}"
+      loop_control:
+        label: "{{ item.server }}"
+
+    - name: Configure DNS resolvers and search domains
+      f5networks.f5os.f5os_dns:
+        dns_servers: "{{ f5os_dns_servers }}"
+        dns_domains: "{{ f5os_dns_domains }}"
+        state: present
+
+    - name: Configure SNMP communities, targets and system MIB values
+      f5networks.f5os.f5os_snmp:
+        snmp_community: "{{ f5os_snmp_communities }}"
+        snmp_target: "{{ f5os_snmp_targets }}"
+        snmp_mib:
+          syslocation: "{{ f5os_snmp_location }}"
+          syscontact: "{{ f5os_snmp_contact }}"
+        state: present
+
+    - name: Configure remote syslog forwarding
+      f5networks.f5os.f5os_logging:
+        servers: "{{ f5os_syslog_servers }}"
+        include_hostname: true
+        state: present
+      when: f5os_syslog_servers | length > 0
+
+    - name: Configure the out-of-band management interface
+      f5networks.f5os.rseries_management_interfaces:
+        dhcp: "{{ f5os_mgmt_dhcp | bool }}"
+        ipv4: "{{ f5os_mgmt_ipv4 }}"
+        state: present
+      when: f5os_manage_mgmt_interface | bool

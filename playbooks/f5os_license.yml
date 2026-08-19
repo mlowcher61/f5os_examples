@@ -1,0 +1,64 @@
+---
+# Activate the F5OS platform licence.
+#
+# Two paths, and the difference matters operationally:
+#
+#   Connected     - the appliance itself reaches activate.f5.com. Nothing to
+#                   do beyond supplying the registration key.
+#   Disconnected  - point license_server at a local F5 iQuery/BIG-IQ licence
+#                   server, or set proxy_server if the appliance can only get
+#                   out through a proxy.
+#
+# The registration key is a licensable asset, not a routine variable. Supply
+# it from the job template as a survey answer or from a second custom
+# credential - never commit it.
+#
+# AAP: job template "F5OS - License"
+
+- name: Build the F5OS target from the attached credential
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - f5os_target
+
+- name: Activate the F5OS licence
+  hosts: f5os
+  gather_facts: false
+  vars:
+    # Required. Pass with -e or a survey; there is no sane default.
+    # f5os_registration_key: XXXXX-XXXXX-XXXXX-XXXXX-XXXXXXX
+
+    f5os_license_server: activate.f5.com
+    f5os_addon_keys: []
+    # f5os_proxy_server: http://proxy.example.com:3128
+
+  tasks:
+    - name: Require a registration key before doing anything
+      ansible.builtin.assert:
+        that:
+          - f5os_registration_key is defined
+          - f5os_registration_key | length > 0
+        quiet: true
+        fail_msg: >-
+          f5os_registration_key is not set. Add it as a survey question on the
+          job template, or pass -e f5os_registration_key=... Never commit it.
+
+    - name: Activate the licence
+      f5networks.f5os.f5os_license:
+        registration_key: "{{ f5os_registration_key }}"
+        license_server: "{{ f5os_license_server }}"
+        addon_keys: "{{ f5os_addon_keys | default(omit) }}"
+        proxy_server: "{{ f5os_proxy_server | default(omit) }}"
+        state: present
+      no_log: true
+
+    - name: Confirm the appliance now reports as licensed
+      f5networks.f5os.f5os_device_info:
+        gather_subset:
+          - system-info
+      register: f5os_licensed_state
+
+    - name: Show the post-activation system information
+      ansible.builtin.debug:
+        msg: "{{ f5os_licensed_state.system_info | default({}) }}"

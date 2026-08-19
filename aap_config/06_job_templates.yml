@@ -1,0 +1,105 @@
+---
+# One job template per sample playbook.
+#
+# Every template gets the same four things, which is the whole point of the
+# design: the project, the f5_inventory, the F5OS execution environment and
+# the F5OS rSeries credential. Because the credential carries the appliance
+# details, pointing all ten templates at a different appliance is one
+# credential change.
+#
+# The templates are defined as data and created in a single loop, so adding an
+# eleventh playbook means adding four lines here rather than another task.
+- name: Create the F5OS job templates
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    f5os_job_templates:
+      - name: "F5OS - Device Info"
+        playbook: playbooks/f5os_device_info.yml
+        description: "Read-only inventory of the appliance. Run this first to prove connectivity."
+
+      - name: "F5OS - Networking"
+        playbook: playbooks/f5os_networking.yml
+        description: "Configure VLANs, physical interfaces and LACP link aggregation."
+        ask_variables_on_launch: true
+
+      - name: "F5OS - Tenant Deploy"
+        playbook: playbooks/f5os_tenant_deploy.yml
+        description: "Import a BIG-IP image and deploy a tenant, waiting until its API answers."
+        ask_variables_on_launch: true
+
+      - name: "F5OS - Config Backup"
+        playbook: playbooks/f5os_config_backup.yml
+        description: "Back up the F5OS configuration to a remote server. Safe to schedule."
+
+      - name: "F5OS - System Settings"
+        playbook: playbooks/f5os_system_settings.yml
+        description: "Baseline NTP, DNS, SNMP, syslog and management interface settings."
+        ask_variables_on_launch: true
+
+      - name: "F5OS - Users and Auth"
+        playbook: playbooks/f5os_users.yml
+        description: "Local users, RBAC roles, password policy and remote authentication."
+        ask_variables_on_launch: true
+
+      - name: "F5OS - License"
+        playbook: playbooks/f5os_license.yml
+        description: "Activate the platform licence. Requires a registration key at launch."
+        ask_variables_on_launch: true
+
+      - name: "F5OS - QKView"
+        playbook: playbooks/f5os_qkview.yml
+        description: "Generate a diagnostic bundle for an F5 Support case."
+
+      - name: "F5OS - Security Hardening"
+        playbook: playbooks/f5os_security_hardening.yml
+        description: >-
+          Install a management TLS certificate and restrict the management
+          allow-list. CAN LOCK AAP OUT - review the allow-list before running.
+        ask_variables_on_launch: true
+
+      - name: "F5OS - System Upgrade"
+        playbook: playbooks/f5os_system_upgrade.yml
+        description: >-
+          Import and optionally install an F5OS image. REBOOTS THE APPLIANCE
+          and takes every tenant down. Change-window only.
+        ask_variables_on_launch: true
+
+  module_defaults:
+    group/ansible.controller.controller:
+      controller_host: "{{ controller_host }}"
+      controller_username: "{{ controller_username }}"
+      controller_password: "{{ controller_password }}"
+      validate_certs: "{{ aap_validate_certs | default(false) }}"
+
+  tasks:
+    - name: Create the job templates
+      ansible.controller.job_template:
+        name: "{{ item.name }}"
+        description: "{{ item.description }}"
+        organization: "{{ aap_organization }}"
+        job_type: run
+        project: "{{ aap_project | default('F5OS Examples') }}"
+        playbook: "{{ item.playbook }}"
+        inventory: "{{ aap_inventory | default('f5_inventory') }}"
+        execution_environment: "{{ aap_execution_environment | default('F5OS EE') }}"
+        credentials:
+          - "{{ f5os_credential_name | default('F5OS rSeries') }}"
+        ask_variables_on_launch: "{{ item.ask_variables_on_launch | default(false) }}"
+        become_enabled: false
+        state: present
+      loop: "{{ f5os_job_templates }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Summarise what was created
+      ansible.builtin.debug:
+        msg: >-
+          {{ f5os_job_templates | length }} job templates created in
+          '{{ aap_organization }}', all using inventory
+          '{{ aap_inventory | default('f5_inventory') }}', execution environment
+          '{{ aap_execution_environment | default('F5OS EE') }}' and credential
+          '{{ f5os_credential_name | default('F5OS rSeries') }}'.
+          Run "F5OS - Device Info" first.

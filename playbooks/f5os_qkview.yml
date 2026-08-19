@@ -1,0 +1,54 @@
+---
+# Generate a qkview diagnostic bundle - the file F5 Support asks for on
+# essentially every case.
+#
+# Two knobs are worth understanding before you run this against a production
+# appliance under load:
+#
+#   exclude_cores  - core dumps are the largest part of a qkview and are
+#                    rarely what Support needs first. Excluding them turns a
+#                    multi-gigabyte bundle into a manageable one.
+#   max_file_size  - a cap in MB. Generation is I/O heavy; an uncapped qkview
+#                    on a busy appliance can take a long time.
+#
+# timeout: 0 means "issue the request and return" rather than blocking the job
+# until the bundle is written. Raise it if you want the job to wait.
+#
+# AAP: job template "F5OS - QKView" (attach to an incident workflow)
+
+- name: Build the F5OS target from the attached credential
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - f5os_target
+
+- name: Generate a qkview diagnostic bundle
+  hosts: f5os
+  gather_facts: false
+  vars:
+    # Date-stamped so repeated runs during an incident do not collide.
+    f5os_qkview_filename: "{{ f5os_host }}-{{ '%Y%m%d-%H%M' | strftime }}.qkview"
+    f5os_qkview_exclude_cores: true
+    f5os_qkview_max_file_size: 500
+    f5os_qkview_max_core_size: 25
+    # Seconds to wait for completion. 0 returns immediately.
+    f5os_qkview_timeout: 0
+
+  tasks:
+    - name: Generate the qkview
+      f5networks.f5os.f5os_qkview:
+        filename: "{{ f5os_qkview_filename }}"
+        exclude_cores: "{{ f5os_qkview_exclude_cores | bool }}"
+        max_file_size: "{{ f5os_qkview_max_file_size }}"
+        max_core_size: "{{ f5os_qkview_max_core_size }}"
+        timeout: "{{ f5os_qkview_timeout }}"
+        state: present
+      register: f5os_qkview_result
+
+    - name: Explain where to collect the bundle
+      ansible.builtin.debug:
+        msg: >-
+          qkview '{{ f5os_qkview_filename }}' requested. Download it from the
+          F5OS webUI under System Settings > Diagnostics > QKView, or via the
+          appliance API, then attach it to your F5 Support case.

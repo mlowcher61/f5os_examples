@@ -1,0 +1,70 @@
+---
+# RUN THIS ONE FIRST.
+#
+# It is completely read-only, so it is the safest way to prove that your
+# credential, execution environment and network path to the appliance all
+# work before any playbook here changes something.
+#
+# AAP: job template "F5OS - Device Info"
+
+- name: Build the F5OS target from the attached credential
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - f5os_target
+
+- name: Collect information from the F5OS appliance
+  hosts: f5os
+  gather_facts: false
+  vars:
+    # Valid values: all, interfaces, lag-interfaces, vlans, controller-images,
+    # partition-images, partitions-info, tenant-images, tenants-info,
+    # snmp-info, qos-info, system-info.
+    # Any value can be negated with a "!" prefix, e.g. "!qos-info".
+    # Override this from the job template survey to widen or narrow the scan.
+    f5os_gather_subset:
+      - system-info
+      - interfaces
+      - vlans
+      - tenants-info
+
+    # Set to true to also drop the full result on the execution node as YAML.
+    # Off by default because the output can be large and job artifacts on an
+    # execution node are discarded when the pod is torn down.
+    f5os_info_save_report: false
+    f5os_info_report_path: "/tmp/f5os_device_info_{{ inventory_hostname }}.yml"
+
+  tasks:
+    - name: Gather the requested F5OS information
+      f5networks.f5os.f5os_device_info:
+        gather_subset: "{{ f5os_gather_subset }}"
+      register: f5os_facts
+
+    - name: Show the platform summary
+      ansible.builtin.debug:
+        msg: "{{ f5os_facts.system_info | default('system-info was not in gather_subset') }}"
+
+    - name: Show the configured VLANs
+      ansible.builtin.debug:
+        msg: >-
+          VLAN {{ item.vlan_id }} ({{ item.name | default('unnamed') }})
+      loop: "{{ f5os_facts.vlans | default([]) }}"
+      loop_control:
+        label: "{{ item.vlan_id | default('?') }}"
+
+    - name: Show the tenants and what state each one is in
+      ansible.builtin.debug:
+        msg: >-
+          Tenant {{ item.name }} is {{ item.state | default('unknown') }}
+      loop: "{{ f5os_facts.tenants_info | default([]) }}"
+      loop_control:
+        label: "{{ item.name | default('?') }}"
+
+    - name: Write the full report to disk
+      ansible.builtin.copy:
+        content: "{{ f5os_facts | to_nice_yaml(indent=2) }}"
+        dest: "{{ f5os_info_report_path }}"
+        mode: "0640"
+      delegate_to: localhost
+      when: f5os_info_save_report | bool

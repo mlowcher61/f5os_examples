@@ -1,0 +1,20 @@
+---
+# Values supplied by the "F5OS rSeries" custom credential in AAP.
+#
+# The credential type injects these as extra vars, and extra vars beat role
+# defaults, so in AAP these defaults are never used. They exist so the same
+# playbooks also run from a laptop with environment variables:
+#
+#   export F5OS_HOST=10.1.1.245 F5OS_USER=admin F5OS_PASSWORD='...'
+#   ansible-playbook playbooks/f5os_device_info.yml
+#
+# ...or with -e f5os_host=... on the command line.
+f5os_host: "{{ lookup('ansible.builtin.env', 'F5OS_HOST') }}"
+f5os_user: "{{ lookup('ansible.builtin.env', 'F5OS_USER') }}"
+f5os_password: "{{ lookup('ansible.builtin.env', 'F5OS_PASSWORD') }}"
+f5os_port: "{{ lookup('ansible.builtin.env', 'F5OS_PORT') | default(8888, true) }}"
+f5os_validate_certs: false
+
+# The in-memory inventory name the appliance is added under. Cosmetic - it is
+# what shows up in job output and in the host list.
+f5os_target_name: f5os_appliance

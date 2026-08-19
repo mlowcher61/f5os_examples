@@ -1,0 +1,52 @@
+---
+# Register the custom F5OS execution environment.
+#
+# This does NOT build the image - ansible-builder does that (see
+# execution-environment/execution-environment.yml). This only tells AAP where
+# to pull it from.
+#
+# If you have not built an image yet, set
+#   aap_execution_environment: "Default execution environment"
+# in vars/main.yml and skip this stage. The job templates will then run on the
+# stock EE, which does NOT contain f5networks.f5os - so you must also create
+# collections/requirements.yml in the project so AAP installs it per job.
+# Building the EE is the better answer; this is the escape hatch.
+- name: Register the F5OS execution environment
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  module_defaults:
+    group/ansible.controller.controller:
+      controller_host: "{{ controller_host }}"
+      controller_username: "{{ controller_username }}"
+      controller_password: "{{ controller_password }}"
+      validate_certs: "{{ aap_validate_certs | default(false) }}"
+
+  tasks:
+    - name: Container registry credential for pulling the EE
+      ansible.controller.credential:
+        name: "{{ ee_registry_credential | default('F5OS EE Registry') }}"
+        organization: "{{ aap_organization }}"
+        credential_type: "Container Registry"
+        inputs:
+          host: "{{ ee_registry_host | default('quay.io') }}"
+          username: "{{ ee_registry_username }}"
+          password: "{{ ee_registry_password }}"
+          verify_ssl: true
+        state: present
+      no_log: true
+      when:
+        - ee_registry_username is defined
+        - ee_registry_username | length > 0
+
+    - name: F5OS execution environment
+      ansible.controller.execution_environment:
+        name: "{{ aap_execution_environment | default('F5OS EE') }}"
+        description: "ee-supported-rhel9 plus f5networks.f5os and ansible.netcommon"
+        image: "{{ ee_image | default('quay.io/mlowcher61/f5os-ee:latest') }}"
+        organization: "{{ aap_organization }}"
+        pull: missing
+        credential: "{{ (ee_registry_username is defined and ee_registry_username | length > 0) | ternary(ee_registry_credential | default('F5OS EE Registry'), omit) }}"
+        state: present
+      when: aap_execution_environment | default('F5OS EE') != 'Default execution environment'

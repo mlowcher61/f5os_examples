@@ -1,0 +1,20 @@
+---
+# Collections baked into the F5OS execution environment.
+collections:
+  # F5's certified F5OS collection - the modules every playbook here uses.
+  - name: f5networks.f5os
+    version: ">=1.22.0"
+
+  # Provides the ansible.netcommon.httpapi connection plugin that the F5OS
+  # modules connect through. Installed as a dependency of f5networks.f5os,
+  # but pinned explicitly so an EE rebuild cannot silently drop it.
+  - name: ansible.netcommon
+    version: ">=8.0.0"
+
+  # Lets a job template manage AAP itself (used by aap_config/).
+  - name: ansible.controller
+  - name: ansible.platform
+
+  # ansible.builtin covers everything else these playbooks need; community.general
+  # is included only for the filters commonly reached for when extending them.
+  - name: community.general

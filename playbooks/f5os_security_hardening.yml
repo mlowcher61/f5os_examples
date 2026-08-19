@@ -1,0 +1,92 @@
+---
+# Two hardening steps that pair naturally: replace the self-signed management
+# certificate, and restrict which networks may reach the management services
+# at all.
+#
+# ORDER MATTERS AND THIS PLAYBOOK CAN LOCK YOU OUT.
+# f5os_allowed_ips replaces the allow-list rather than appending to it. If the
+# list you supply does not include the network your AAP execution nodes live
+# on, the job will succeed and you will never reach the appliance again
+# without console access. The pre-flight assert below refuses to run unless
+# you have explicitly acknowledged the list.
+#
+# AAP: job template "F5OS - Security Hardening"
+#      Recommend enabling "Prompt on launch" for the allow-list.
+
+- name: Build the F5OS target from the attached credential
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - f5os_target
+
+- name: Harden management access
+  hosts: f5os
+  gather_facts: false
+  vars:
+    # --- TLS certificate -------------------------------------------------
+    f5os_manage_tls_cert: true
+    f5os_tls_cert_name: f5os-mgmt-cert
+    f5os_tls_key_type: rsa
+    f5os_tls_key_size: 4096
+    f5os_tls_days_valid: 730
+    f5os_tls_subject:
+      country: US
+      province: Texas
+      city: Austin
+      organization: Example Corp
+      unit: Network Operations
+      email: netops@example.com
+    f5os_tls_subject_alternative_name: "DNS:rseries01.example.com"
+    f5os_tls_store: true
+
+    # --- Management allow-list -------------------------------------------
+    # Leave false until you are certain the list below includes your AAP
+    # execution nodes, your jump hosts and your own workstation.
+    f5os_manage_allowed_ips: false
+    f5os_allowed_ips:
+      - name: aap-execution-nodes
+        ipv4:
+          address: 10.20.0.0
+          prefix: 16
+      - name: netops-jumphosts
+        ipv4:
+          address: 10.30.40.0
+          prefix: 24
+
+  tasks:
+    - name: Generate and store the management TLS certificate and key
+      f5networks.f5os.f5os_tls_cert_key:
+        name: "{{ f5os_tls_cert_name }}"
+        key_type: "{{ f5os_tls_key_type }}"
+        key_size: "{{ f5os_tls_key_size }}"
+        days_valid: "{{ f5os_tls_days_valid }}"
+        country: "{{ f5os_tls_subject.country | default(omit) }}"
+        province: "{{ f5os_tls_subject.province | default(omit) }}"
+        city: "{{ f5os_tls_subject.city | default(omit) }}"
+        organization: "{{ f5os_tls_subject.organization | default(omit) }}"
+        unit: "{{ f5os_tls_subject.unit | default(omit) }}"
+        email: "{{ f5os_tls_subject.email | default(omit) }}"
+        subject_alternative_name: "{{ f5os_tls_subject_alternative_name | default(omit) }}"
+        store_tls: "{{ f5os_tls_store | bool }}"
+        state: present
+      when: f5os_manage_tls_cert | bool
+
+    - name: Refuse to apply an allow-list that has not been reviewed
+      ansible.builtin.assert:
+        that:
+          - f5os_allowed_ips | length > 0
+          - f5os_allowed_ips_reviewed | default(false) | bool
+        quiet: true
+        fail_msg: >-
+          Applying f5os_allowed_ips REPLACES the management allow-list and can
+          permanently lock AAP out of this appliance. Confirm that the list
+          includes your execution nodes and jump hosts, then re-run with
+          -e f5os_allowed_ips_reviewed=true
+      when: f5os_manage_allowed_ips | bool
+
+    - name: Restrict management access to the approved networks
+      f5networks.f5os.f5os_allowed_ips:
+        allowed: "{{ f5os_allowed_ips }}"
+        state: present
+      when: f5os_manage_allowed_ips | bool

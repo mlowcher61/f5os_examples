@@ -1,0 +1,117 @@
+---
+# Day-1 network plumbing for an rSeries appliance: VLANs, physical interfaces
+# and LACP link aggregation.
+#
+# The three module calls are ordered deliberately. A VLAN has to exist before
+# an interface or a LAG can carry it, so VLANs are created first and torn down
+# last. Running this against an appliance that already matches the desired
+# state reports "ok" throughout - the modules are idempotent.
+#
+# AAP: job template "F5OS - Networking"
+
+- name: Build the F5OS target from the attached credential
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - f5os_target
+
+- name: Configure VLANs, interfaces and LAGs
+  hosts: f5os
+  gather_facts: false
+  vars:
+    # ---------------------------------------------------------------------
+    # Desired network state. Override the whole structure from the job
+    # template's extra vars, or point the template at a group_vars file so
+    # each site keeps its own copy.
+    # ---------------------------------------------------------------------
+
+    # VLANs to exist on the appliance.
+    f5os_vlans:
+      - name: vlan-external
+        vlan_id: 245
+      - name: vlan-internal
+        vlan_id: 246
+      - name: vlan-ha
+        vlan_id: 247
+
+    # Physical interfaces. On rSeries these are named "1.0", "2.0", ...
+    # (VELOS uses "<blade>/<port>.0", e.g. "2/1.0").
+    f5os_interfaces:
+      - name: "3.0"
+        description: "Tenant data - external"
+        enabled: true
+        trunk_vlans:
+          - 245
+          - 246
+
+    # LACP bundles. config_members are physical interface names and must not
+    # also appear in f5os_interfaces above - a port belongs either to a LAG or
+    # to itself, never both.
+    f5os_lags:
+      - name: lag-uplink
+        lag_type: lacp
+        mode: active
+        interval: slow
+        native_vlan: 247
+        trunk_vlans:
+          - 245
+          - 246
+        config_members:
+          - "1.0"
+          - "2.0"
+
+  tasks:
+    - name: Create the VLANs
+      f5networks.f5os.f5os_vlan:
+        name: "{{ item.name | default(omit) }}"
+        vlan_id: "{{ item.vlan_id }}"
+        state: present
+      loop: "{{ f5os_vlans }}"
+      loop_control:
+        label: "{{ item.vlan_id }} ({{ item.name | default('unnamed') }})"
+
+    - name: Configure the physical interfaces
+      f5networks.f5os.f5os_interface:
+        name: "{{ item.name }}"
+        description: "{{ item.description | default(omit) }}"
+        enabled: "{{ item.enabled | default(omit) }}"
+        native_vlan: "{{ item.native_vlan | default(omit) }}"
+        trunk_vlans: "{{ item.trunk_vlans | default(omit) }}"
+        forward_error_correction: "{{ item.forward_error_correction | default(omit) }}"
+        state: present
+      loop: "{{ f5os_interfaces }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Configure the LAG interfaces
+      f5networks.f5os.f5os_lag:
+        name: "{{ item.name }}"
+        lag_type: "{{ item.lag_type | default('lacp') }}"
+        mode: "{{ item.mode | default(omit) }}"
+        interval: "{{ item.interval | default(omit) }}"
+        native_vlan: "{{ item.native_vlan | default(omit) }}"
+        trunk_vlans: "{{ item.trunk_vlans | default(omit) }}"
+        config_members: "{{ item.config_members | default(omit) }}"
+        state: present
+      loop: "{{ f5os_lags }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Re-read the appliance and confirm every VLAN landed
+      f5networks.f5os.f5os_device_info:
+        gather_subset:
+          - vlans
+          - interfaces
+          - lag-interfaces
+      register: f5os_net_state
+
+    - name: Fail if a requested VLAN is missing from the appliance
+      ansible.builtin.assert:
+        that:
+          - item.vlan_id in (f5os_net_state.vlans | default([]) | map(attribute='vlan_id') | list)
+        quiet: true
+        fail_msg: "VLAN {{ item.vlan_id }} was requested but is not present on the appliance."
+      loop: "{{ f5os_vlans }}"
+      loop_control:
+        label: "{{ item.vlan_id }}"

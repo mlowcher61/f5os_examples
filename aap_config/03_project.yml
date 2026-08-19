@@ -1,0 +1,35 @@
+---
+# The AAP project that syncs this git repository.
+#
+# scm_update_on_launch is deliberately false. Turning it on makes every job
+# wait for a git fetch, and means a push to main silently changes what a
+# change-window job will run. Sync explicitly instead - or turn it on for a
+# lab and off for production.
+- name: Create the F5OS project
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  module_defaults:
+    group/ansible.controller.controller:
+      controller_host: "{{ controller_host }}"
+      controller_username: "{{ controller_username }}"
+      controller_password: "{{ controller_password }}"
+      validate_certs: "{{ aap_validate_certs | default(false) }}"
+
+  tasks:
+    - name: F5OS examples project
+      ansible.controller.project:
+        name: "{{ aap_project | default('F5OS Examples') }}"
+        description: "Sample playbooks for configuring F5OS on rSeries"
+        organization: "{{ aap_organization }}"
+        scm_type: git
+        scm_url: "{{ project_scm_url | default('https://github.com/mlowcher61/f5os_examples.git') }}"
+        scm_branch: "{{ project_scm_branch | default('main') }}"
+        scm_clean: true
+        scm_delete_on_update: false
+        scm_update_on_launch: false
+        credential: "{{ (scm_token is defined and scm_token | length > 0) | ternary(project_scm_credential | default('F5OS SCM'), omit) }}"
+        default_environment: "{{ aap_execution_environment | default('F5OS EE') }}"
+        state: present
+        wait: true

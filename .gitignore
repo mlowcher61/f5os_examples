@@ -1,0 +1,20 @@
+# Real deployment values. Only vars/main.yml.example is committed.
+aap_config/vars/main.yml
+aap_config/vars/*.yml
+!aap_config/vars/*.yml.example
+
+# Collections installed into the repo by ansible-galaxy
+collections/ansible_collections/
+
+# Artifacts produced by the sample playbooks
+backups/
+*.qkview
+*.tar.gz
+
+# Python / Ansible scratch
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.retry
+.DS_Store

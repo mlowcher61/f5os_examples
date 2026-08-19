@@ -1,0 +1,43 @@
+---
+# Group variables for the "f5os" group.
+#
+# THIS FILE IS THE SINGLE SOURCE OF TRUTH for the F5OS connection profile.
+# aap_config/04_inventory.yml reads this exact file and loads it into the
+# "f5os" group of the AAP inventory, so the platform and a laptop always
+# behave identically. Change a value here and re-run the config-as-code.
+#
+# It has to live NEXT TO THE INVENTORY FILE, not at the repo root. Ansible
+# only auto-loads group_vars adjacent to the inventory or adjacent to the
+# playbook being run. A group_vars/ directory at the repo root is silently
+# ignored, and the f5os group would come up with no connection settings.
+#
+# What belongs here: anything that is true of EVERY F5OS appliance - the
+# protocol, port and timeouts. It is not sensitive, so it is safe in git.
+#
+# What does NOT belong here: which appliance, and whose password. Those are
+# per-device secrets and come from the "F5OS rSeries" custom credential in
+# AAP, which the f5os_target role turns into ansible_host / ansible_user /
+# ansible_httpapi_password at run time.
+
+# The f5networks.f5os modules do not accept host/user/password arguments.
+# They read everything from the httpapi connection plugin, which is why this
+# group exists at all.
+ansible_connection: ansible.netcommon.httpapi
+ansible_network_os: f5networks.f5os.f5os
+
+# F5OS speaks RESTCONF on 8888 and OpenAPI on 443. The collection expects
+# 8888 unless you are deliberately using the OpenAPI endpoints.
+ansible_httpapi_port: 8888
+ansible_httpapi_use_ssl: true
+ansible_httpapi_use_proxy: false
+
+# rSeries and VELOS ship with self-signed certificates. Set this to true once
+# you have installed a trusted certificate (see playbooks/f5os_security_hardening.yml).
+ansible_httpapi_validate_certs: false
+
+# Image imports and tenant deployments routinely run for many minutes.
+ansible_command_timeout: 1800
+
+# Puts the full RESTCONF request/response in the job output at -vvv, which is
+# the fastest way to debug an F5OS module that returns an unhelpful error.
+persistent_log_messages: true

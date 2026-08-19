@@ -1,0 +1,58 @@
+---
+# The f5_inventory: one localhost, plus the f5os group that carries the
+# connection profile.
+#
+# The group variables are NOT written out here. They are read straight from
+# group_vars/f5os.yml in this repo, so the file a developer edits on a laptop
+# and the group AAP uses can never drift apart. Change the connection profile
+# in one place, re-run this playbook, and both agree.
+- name: Create the F5OS inventory
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # Single source of truth for the F5OS connection profile.
+    f5os_group_vars: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../inventory/group_vars/f5os.yml') | from_yaml }}"
+
+  module_defaults:
+    group/ansible.controller.controller:
+      controller_host: "{{ controller_host }}"
+      controller_username: "{{ controller_username }}"
+      controller_password: "{{ controller_password }}"
+      validate_certs: "{{ aap_validate_certs | default(false) }}"
+
+  tasks:
+    - name: F5OS inventory
+      ansible.controller.inventory:
+        name: "{{ aap_inventory | default('f5_inventory') }}"
+        description: >-
+          Localhost-only inventory for F5OS automation. Appliances are added
+          to the f5os group at run time from the F5OS rSeries credential.
+        organization: "{{ aap_organization }}"
+        state: present
+
+    - name: Localhost - where every F5OS playbook starts
+      ansible.controller.host:
+        name: localhost
+        inventory: "{{ aap_inventory | default('f5_inventory') }}"
+        description: "Runs the f5os_target bridge play"
+        variables:
+          ansible_connection: local
+          ansible_python_interpreter: "{{ '{{ ansible_playbook_python }}' }}"
+        state: present
+
+    - name: The f5os group - carries the shared httpapi connection profile
+      ansible.controller.group:
+        name: f5os
+        inventory: "{{ aap_inventory | default('f5_inventory') }}"
+        description: >-
+          Connection profile for F5OS appliances. Hosts are added at run time
+          by the f5os_target role and inherit these variables. Sourced from
+          group_vars/f5os.yml in the f5os_examples repo.
+        variables: "{{ f5os_group_vars }}"
+        state: present
+
+    - name: Show the group variables that were loaded
+      ansible.builtin.debug:
+        msg: "{{ f5os_group_vars }}"

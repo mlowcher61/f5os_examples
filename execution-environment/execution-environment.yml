@@ -1,0 +1,35 @@
+---
+# Execution environment for the F5OS / rSeries automation in this repo.
+#
+# Build and push it with ansible-builder:
+#
+#   cd execution-environment
+#   ansible-builder build -t quay.io/mlowcher61/f5os-ee:latest -v3
+#   podman push quay.io/mlowcher61/f5os-ee:latest
+#
+# Then register it in AAP with aap_config/05_execution_environment.yml.
+#
+# WHY A CUSTOM EE RATHER THAN THE STOCK ONE
+# The shipped "Default execution environment" does not contain
+# f5networks.f5os. You can work around that by letting AAP install the
+# collection from the project on every run, but that adds a Galaxy round-trip
+# to every job and breaks entirely on a disconnected controller. Baking the
+# collection into an image makes jobs start faster and run the same way every
+# time, which is what you want for an image-upgrade job you cannot re-run
+# safely.
+version: 3
+
+images:
+  base_image:
+    # ee-supported carries the Red Hat certified collections and a supported
+    # Python runtime. Swap to ee-minimal-rhel9 for a smaller image if you do
+    # not need the rest of the supported content.
+    name: registry.redhat.io/ansible-automation-platform-25/ee-supported-rhel9:latest
+
+dependencies:
+  galaxy: requirements.yml
+  python: requirements.txt
+  system: bindep.txt
+
+options:
+  package_manager_path: /usr/bin/microdnf

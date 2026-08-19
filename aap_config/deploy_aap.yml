@@ -1,0 +1,21 @@
+---
+# Deploy the whole F5OS solution into Ansible Automation Platform.
+#
+#   ansible-playbook aap_config/deploy_aap.yml -e @aap_config/vars/main.yml
+#
+# The numbered playbooks are ordered by dependency: a credential needs its
+# credential type, a job template needs the project, inventory, execution
+# environment and credential to already exist. Running the whole file is
+# idempotent, so re-run it after any change.
+#
+# You can also run a single stage, which is the usual way to iterate:
+#   ansible-playbook aap_config/06_job_templates.yml -e @aap_config/vars/main.yml
+#
+# import_playbook cannot take a play name, so the name[play] rule is waived.
+- import_playbook: 00_organization.yml           # noqa: name[play]
+- import_playbook: 01_credential_types.yml       # noqa: name[play]
+- import_playbook: 02_credentials.yml            # noqa: name[play]
+- import_playbook: 03_project.yml                # noqa: name[play]
+- import_playbook: 04_inventory.yml              # noqa: name[play]
+- import_playbook: 05_execution_environment.yml  # noqa: name[play]
+- import_playbook: 06_job_templates.yml          # noqa: name[play]
