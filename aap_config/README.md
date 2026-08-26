@@ -7,7 +7,9 @@ thing up on a fresh controller with one command.
 cp vars/main.yml.example vars/main.yml
 $EDITOR vars/main.yml                       # gitignored - never committed
 ansible-playbook aap_config/deploy_aap.yml -e @aap_config/vars/main.yml
+
 or if running from a bastion host instead of the controller:
+
 ansible-playbook aap_config/deploy_aap.yml \
   -e @aap_config/vars/main.yml \
   -e "aap_hostname=https://aap.mycompany.com"
