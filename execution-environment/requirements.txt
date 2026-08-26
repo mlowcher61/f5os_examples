@@ -3,6 +3,17 @@
 packaging
 requests
 urllib3
+# These dependencies are already installed by Ansible, but we list them here for completeness.
+# ansible 
+# ansible-runner
+# cryptography
+# objectpath
+# ordereddict
+# simplejson
+# paramiko
+# jinja2
+# netaddr
+# packaging
 
 # Used by the json_query / to_nice_yaml handling in the device-info and
 # backup playbooks.
