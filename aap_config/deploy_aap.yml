@@ -12,6 +12,7 @@
 #   ansible-playbook aap_config/06_job_templates.yml -e @aap_config/vars/main.yml
 #
 # import_playbook cannot take a play name, so the name[play] rule is waived.
+- import_playbook: 00_preflight.yml              # noqa: name[play]
 - import_playbook: 00_organization.yml           # noqa: name[play]
 - import_playbook: 01_credential_types.yml       # noqa: name[play]
 - import_playbook: 02_credentials.yml            # noqa: name[play]

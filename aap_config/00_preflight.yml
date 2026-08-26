@@ -1,0 +1,73 @@
+---
+# Fail fast, with a readable message, when the control node is missing a
+# Python dependency that these playbooks need.
+#
+# Why this play exists at all:
+#
+# `ansible.platform` is not an ordinary module collection. It ships *action
+# plugins* that spawn a multiprocessing manager subprocess to hold a persistent
+# authenticated session against the platform gateway. That code runs on the
+# CONTROL NODE, inside the `ansible-playbook` process itself - so it imports
+# from the interpreter that launched ansible, and `ansible_python_interpreter`
+# has no influence over it whatsoever.
+#
+# `ansible.controller`, used by every other playbook here, is the opposite:
+# ordinary modules built on ansible.module_utils.urls, which is stdlib only.
+# That asymmetry is why only 00_organization.yml can fail this way.
+#
+# The trap: on RHEL 9, `pip3` is Python 3.9's pip while ansible-core is built
+# against Python 3.12. `pip3 install requests` reports success and fixes
+# nothing. `ansible_playbook_python` below is a magic variable holding the
+# absolute path of the interpreter actually running this playbook, so probing
+# with it is the only check that cannot lie.
+#
+# None of this applies to AAP job runs - the custom execution environment in
+# execution-environment/ already bakes these in via its requirements.txt.
+- name: Verify control node prerequisites
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Probe the control node interpreter for requests
+      ansible.builtin.command: "{{ ansible_playbook_python }} -c 'import requests'"
+      register: requests_probe
+      changed_when: false
+      failed_when: false
+      # A read-only probe, so it must still run under --check. Without this the
+      # command is skipped, rc is never registered, and the assert below fails
+      # for the wrong reason on every check-mode run.
+      check_mode: false
+
+    - name: The ansible.platform action plugin needs requests on the control node
+      ansible.builtin.assert:
+        # default(1) covers the case where the probe could not execute at all
+        # and so registered no rc - still a failure, just a stranger one.
+        that: requests_probe.rc | default(1) == 0
+        success_msg: "requests is importable by {{ ansible_playbook_python }}"
+        fail_msg: |-
+          Python 'requests' is not importable by the interpreter that is
+          running this playbook:
+
+              {{ ansible_playbook_python }}
+
+          ansible.platform runs an action plugin inside the ansible-playbook
+          process itself, so requests has to be installed for THAT interpreter.
+          ansible_python_interpreter does not affect it.
+
+          Do NOT use a bare `pip3`. On RHEL 9 pip3 belongs to Python 3.9 while
+          ansible-core runs on 3.12, so it reports "Requirement already
+          satisfied" and fixes nothing.
+
+          Install it into that exact interpreter:
+
+              {{ ansible_playbook_python }} -m pip install requests
+
+          On RHEL, prefer the matching system RPM instead so you stay inside
+          the supported package set:
+
+              sudo dnf install -y {{ ansible_playbook_python | basename }}-requests
+
+          Then verify - this must print nothing:
+
+              {{ ansible_playbook_python }} -c 'import requests'

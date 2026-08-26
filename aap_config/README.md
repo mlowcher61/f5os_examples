@@ -17,10 +17,36 @@ ansible-playbook aap_config/deploy_aap.yml \
 
 Everything is idempotent. Re-run it after any change.
 
+## Prerequisites on the machine you run this from
+
+You need the two collections from the repo-root `requirements.yml`, plus the
+Python `requests` library — **installed for the interpreter that runs
+`ansible-playbook`, which is often not the one `pip3` points at.**
+
+```bash
+ansible-galaxy collection install -r ../requirements.yml
+
+# Find the interpreter ansible actually uses, then install into THAT one.
+ansible --version | grep -i 'python version'
+sudo dnf install -y python3.12-requests        # match your version
+python3.12 -c 'import requests'                # must print nothing
+```
+
+On RHEL 9 `pip3` is Python 3.9's pip while ansible-core is built against Python
+3.12, so `pip3 install requests` reports success and fixes nothing. Only
+`00_organization.yml` needs `requests`, because `ansible.platform` ships action
+plugins that run inside the `ansible-playbook` process on the control node
+rather than as ordinary modules. `00_preflight.yml` checks this for you and
+fails with a readable message instead of a multiprocessing traceback.
+
+None of this applies to jobs launched from AAP itself — the execution
+environment in `execution-environment/` already includes these.
+
 ## Files, in dependency order
 
 | File | Creates | Collection |
 |---|---|---|
+| `00_preflight.yml` | Nothing — asserts control node prerequisites | `ansible.builtin` |
 | `00_organization.yml` | Organization | `ansible.platform` |
 | `01_credential_types.yml` | `f5os_rseries` credential type | `ansible.controller` |
 | `02_credentials.yml` | `F5OS rSeries` credential (+ optional SCM credential) | `ansible.controller` |
