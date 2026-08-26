@@ -7,7 +7,7 @@
 #   ansible-builder build -t quay.io/mlowcher61/f5os-ee:latest -v3
 #   podman push quay.io/mlowcher61/f5os-ee:latest
 #
-# Then register it in AAP with aap_config/05_execution_environment.yml.
+# Then register it in AAP with aap_config/03_execution_environment.yml.
 #
 # WHY A CUSTOM EE RATHER THAN THE STOCK ONE
 # The shipped "Default execution environment" does not contain

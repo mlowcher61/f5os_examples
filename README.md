@@ -32,9 +32,9 @@ stand the whole thing up on a fresh AAP with a single command.
 |---|---|---|
 | Custom credential type | `f5os_rseries` | `aap_config/01_credential_types.yml` |
 | Credential | `F5OS rSeries` | `aap_config/02_credentials.yml` |
-| Project | `F5OS Examples` | `aap_config/03_project.yml` |
-| Inventory | `f5_inventory` | `aap_config/04_inventory.yml` |
-| Execution environment | `F5OS EE` | `aap_config/05_execution_environment.yml` |
+| Execution environment | `F5OS EE` | `aap_config/03_execution_environment.yml` |
+| Project | `F5OS Examples` | `aap_config/04_project.yml` |
+| Inventory | `f5_inventory` | `aap_config/05_inventory.yml` |
 | Job templates | 10, one per playbook | `aap_config/06_job_templates.yml` |
 
 Every job template is wired to the same project, inventory, execution environment
@@ -123,12 +123,13 @@ f5os_examples/
 │
 └── aap_config/                       # config-as-code for AAP
     ├── deploy_aap.yml                # runs 00-06 in dependency order
+    ├── 00_preflight.yml              # asserts control node prerequisites
     ├── 00_organization.yml           # ansible.platform
     ├── 01_credential_types.yml       # ansible.controller
     ├── 02_credentials.yml
-    ├── 03_project.yml
-    ├── 04_inventory.yml
-    ├── 05_execution_environment.yml
+    ├── 03_execution_environment.yml
+    ├── 04_project.yml
+    ├── 05_inventory.yml
     ├── 06_job_templates.yml
     └── vars/main.yml.example         # copy to main.yml (gitignored) and fill in
 ```
@@ -190,7 +191,7 @@ Two playbooks are written to be run in stages rather than in one shot:
   port (8888 for RESTCONF, 443 for OpenAPI).
 - A built and pushed execution environment — see
   [Building the execution environment](#building-the-execution-environment).
-  (Or skip it for a first look; see the note in `05_execution_environment.yml`.)
+  (Or skip it for a first look; see the note in `03_execution_environment.yml`.)
 
 **Steps**
 
@@ -304,7 +305,7 @@ podman push quay.io/mlowcher61/f5os-ee:latest
 ```
 
 Set `ee_image` in `aap_config/vars/main.yml` to the image you pushed, then run
-`aap_config/05_execution_environment.yml` to register it.
+`aap_config/03_execution_environment.yml` to register it.
 
 Base image is `registry.redhat.io/ansible-automation-platform-25/ee-supported-rhel9`,
 which already carries the certified collections and a supported Python runtime.

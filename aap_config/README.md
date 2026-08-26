@@ -50,9 +50,9 @@ environment in `execution-environment/` already includes these.
 | `00_organization.yml` | Organization | `ansible.platform` |
 | `01_credential_types.yml` | `f5os_rseries` credential type | `ansible.controller` |
 | `02_credentials.yml` | `F5OS rSeries` credential (+ optional SCM credential) | `ansible.controller` |
-| `03_project.yml` | `F5OS Examples` project | `ansible.controller` |
-| `04_inventory.yml` | `f5_inventory`, `localhost` host, `f5os` group | `ansible.controller` |
-| `05_execution_environment.yml` | `F5OS EE` (+ optional registry credential) | `ansible.controller` |
+| `03_execution_environment.yml` | `F5OS EE` (+ optional registry credential) | `ansible.controller` |
+| `04_project.yml` | `F5OS Examples` project | `ansible.controller` |
+| `05_inventory.yml` | `f5_inventory`, `localhost` host, `f5os` group | `ansible.controller` |
 | `06_job_templates.yml` | 10 job templates | `ansible.controller` |
 
 The numbering is dependency order, not preference: a credential needs its type,
@@ -92,7 +92,7 @@ need to fill in one set.
 
 ## The inventory has a deliberate shape
 
-`04_inventory.yml` creates a `localhost` host **and** an `f5os` group. Appliances
+`05_inventory.yml` creates a `localhost` host **and** an `f5os` group. Appliances
 are never listed. Instead:
 
 - `localhost` runs the first play of every playbook, with `ansible_connection: local`.
@@ -109,7 +109,7 @@ f5os_group_vars: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../inventor
 
 That keeps a single source of truth — the file a developer edits on a laptop and
 the group AAP uses cannot drift apart. Change the connection profile in one
-place and re-run `04_inventory.yml`.
+place and re-run `05_inventory.yml`.
 
 ## Secrets
 

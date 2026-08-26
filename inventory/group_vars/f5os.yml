@@ -2,7 +2,7 @@
 # Group variables for the "f5os" group.
 #
 # THIS FILE IS THE SINGLE SOURCE OF TRUTH for the F5OS connection profile.
-# aap_config/04_inventory.yml reads this exact file and loads it into the
+# aap_config/05_inventory.yml reads this exact file and loads it into the
 # "f5os" group of the AAP inventory, so the platform and a laptop always
 # behave identically. Change a value here and re-run the config-as-code.
 #

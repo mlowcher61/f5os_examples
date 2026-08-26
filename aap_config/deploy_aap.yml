@@ -5,7 +5,9 @@
 #
 # The numbered playbooks are ordered by dependency: a credential needs its
 # credential type, a job template needs the project, inventory, execution
-# environment and credential to already exist. Running the whole file is
+# environment and credential to already exist. The execution environment
+# comes before the project because the project sets it as its
+# default_environment, so it has to exist first. Running the whole file is
 # idempotent, so re-run it after any change.
 #
 # You can also run a single stage, which is the usual way to iterate:
@@ -16,7 +18,7 @@
 - import_playbook: 00_organization.yml           # noqa: name[play]
 - import_playbook: 01_credential_types.yml       # noqa: name[play]
 - import_playbook: 02_credentials.yml            # noqa: name[play]
-- import_playbook: 03_project.yml                # noqa: name[play]
-- import_playbook: 04_inventory.yml              # noqa: name[play]
-- import_playbook: 05_execution_environment.yml  # noqa: name[play]
+- import_playbook: 03_execution_environment.yml  # noqa: name[play]
+- import_playbook: 04_project.yml                # noqa: name[play]
+- import_playbook: 05_inventory.yml              # noqa: name[play]
 - import_playbook: 06_job_templates.yml          # noqa: name[play]
